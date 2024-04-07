@@ -1,4 +1,4 @@
-﻿using System.Net.Sockets;
+using System.Net.Sockets;
 using System.Net;
 using System.Text;
 
@@ -9,6 +9,7 @@ using Microsoft.VisualBasic;
 class Server
 {
     public static List<TcpClient> Clients = new List<TcpClient>();
+    public static List<TcpClient> InGameClients = new List<TcpClient>();
     public static List<User> Users = new List<User>();
 
     public static void CheckUser(RegForm user, ref Message answer)
@@ -18,13 +19,13 @@ class Server
             if (Users.Find(x => x.Login == user.Login) != null)
             {
                 answer.IsAllOK = false;
-                answer.error = Message.Exception.UserWithTheSameLoginIsAlreadyExist;
+                answer.Error = Message.Exception.UserWithTheSameLoginIsAlreadyExist;
             }
             else
             {
-                User userdata = user;
+                user.ID = Users.Count;
 
-                Users.Add(userdata);
+                Users.Add(user);
 
                 Json.UploadToFile(Users);
             }
@@ -34,7 +35,51 @@ class Server
             if (Users.Find(x => x.Login == user.Login && x.Password == user.Password) == null)
             {
                 answer.IsAllOK = false;
-                answer.error = Message.Exception.WrongLoginOrPassword;
+                answer.Error = Message.Exception.WrongLoginOrPassword;
+            }
+        }
+    }
+
+    public static async Task Game()
+    {
+        while (true)
+        {
+            List<Player> Players = new List<Player>();
+
+            for (int i = 0; i < InGameClients.Count; i++)
+            {
+                if (InGameClients[i].Connected)
+                {
+                    Players.Add(TcpInteraction.ReadfromStream<Player>(InGameClients[i]));
+                }
+                else
+                {
+                    InGameClients.RemoveAt(i);
+                }
+            }
+
+            for (int i = 0; i < Users.Count; i++)
+            {
+                Player player = Players.Find(x => x.ID == Users[i].ID);
+
+                Users[i].X = player.X;
+                Users[i].Y = player.Y;
+            }
+
+            Json.UploadToFile(Users);
+
+            string players_str = Newtonsoft.Json.JsonConvert.SerializeObject(Players);
+
+            for (int i = 0; i < InGameClients.Count; i++)
+            {
+                if (InGameClients[i].Connected)
+                {
+                    await TcpInteraction.WriteToStream(InGameClients[i], players_str);
+                }
+                else
+                {
+                    InGameClients.RemoveAt(i);
+                }
             }
         }
     }
@@ -43,16 +88,20 @@ class Server
     {
         while (true)
         {
-            RegForm user = Newtonsoft.Json.JsonConvert.DeserializeObject<RegForm>(TcpInteraction.ReadfromStream(client));
+            RegForm user = TcpInteraction.ReadfromStream<RegForm>(client);
 
-            Message answer = new Message() { IsAllOK = true };
+            Message answer = new Message() { IsAllOK = true, Error = Message.Exception.None };
 
             CheckUser(user, ref answer);
 
-            await TcpInteraction.WriteToStream(client, Newtonsoft.Json.JsonConvert.SerializeObject(answer));
-        }
-    }
+            await TcpInteraction.WriteToStream(client, answer);
 
+            if (answer.IsAllOK) break;
+        }
+
+        InGameClients.Add(client);
+        await Game();
+    }
 
     public static async Task Main(string[] args)
     {
