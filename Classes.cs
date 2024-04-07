@@ -1,4 +1,4 @@
-﻿using System.Net.Sockets;
+using System.Net.Sockets;
 using System.Text;
 using System.Security.Cryptography;
 
@@ -20,7 +20,7 @@ namespace Classes
 
         public ConsoleColor Color { get; set; }
 
-        public string ID { get; set; }
+        public int ID { get; set; }
     }
 
     public class User : Player
@@ -39,7 +39,7 @@ namespace Classes
     {
         public bool IsAllOK { get; set; }
 
-        public Exception error { get; set; }
+        public Exception Error { get; set; }
 
         public enum Exception
         {
@@ -49,21 +49,20 @@ namespace Classes
         }
     }
 
-
     public class TcpInteraction
     {
-        public static async Task WriteToStream(TcpClient client, string message)
+        public static async Task WriteToStream<T>(TcpClient client, T message)
         {
             var stream = client.GetStream();
-            message += '\0';
+            string str_message = Newtonsoft.Json.JsonConvert.SerializeObject(message) + '\0';
 
-            byte[] bytes = Encoding.UTF8.GetBytes(message.ToArray());
+            byte[] bytes = Encoding.UTF8.GetBytes(str_message.ToArray());
 
             await stream.WriteAsync(bytes);
         }
 
 
-        public static string ReadfromStream(TcpClient client)
+        public static T ReadfromStream<T>(TcpClient client)
         {
             var stream = client.GetStream();
             List<byte> bytes = new List<byte>();
@@ -76,9 +75,7 @@ namespace Classes
                 bytes.Add((byte)bytes_read);
             }
 
-            string str = Encoding.UTF8.GetString(bytes.ToArray());
-
-            return str;
+            return Newtonsoft.Json.JsonConvert.DeserializeObject<T>(Encoding.UTF8.GetString(bytes.ToArray()));
         }
     }
 
@@ -96,6 +93,64 @@ namespace Classes
             string str = File.ReadAllText("userdata.json");
 
             if (str.Length > 0) Users = Newtonsoft.Json.JsonConvert.DeserializeObject<List<User>>(str);
+        }
+    }
+
+    public class Block : Player
+    {
+        public BlockType Type { get; set; }
+
+        public enum BlockType
+        {
+            Empty,
+            Wall
+        }
+    }
+
+    public class Map
+    {
+        public static List<List<Block>> map = new List<List<Block>>();
+
+        public static void Create(int l, int h)
+        {
+            for (int i = 0; i < l; i++)
+            {
+                List<Block> Line = new List<Block>();
+
+                for (int j = 0; j < h; j++)
+                {
+                    if (i == 0 || j == 0 || i == l - 1 || j == h - 1)
+                    {
+                        Line.Add(new Block() { Type = Block.BlockType.Wall, Color = ConsoleColor.Red, Symbol = '#', X = i, Y = j });
+                    }
+                    else
+                    {
+                        Line.Add(new Block() { Type = Block.BlockType.Empty, Color = ConsoleColor.Black, Symbol = ' ', X = i, Y = j });
+                    }
+                }
+
+                map.Add(Line);
+            }
+        }
+
+        public static void Output(List<Player> Players)
+        {
+            for (int i = 0; i < map.Count; i++)
+            {
+                for (int j = 0; j < map[i].Count; j++)
+                {
+                    Console.SetCursorPosition(map[i][j].X, map[i][j].Y);
+                    Console.ForegroundColor = map[i][j].Color;
+                    Console.Write(map[i][j].Symbol);
+                }
+            }
+
+            for (int i = 0; i < Players.Count; i++)
+            {
+                Console.SetCursorPosition(Players[i].X, Players[i].Y);
+                Console.ForegroundColor = Players[i].Color;
+                Console.Write(Players[i].Symbol);
+            }
         }
     }
 }
