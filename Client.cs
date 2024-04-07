@@ -131,7 +131,6 @@ class Client
     public static async Task Main(string[] args)
     {
         TcpClient tcp_client = new TcpClient();
-        Player player = new Player();
 
         await tcp_client.ConnectAsync(IPAddress.Parse("127.0.0.1"), 12345);
         await Console.Out.WriteLineAsync("Connected...\n");
